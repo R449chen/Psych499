@@ -1,0 +1,35 @@
+:root {
+  font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+
+  /* Force a light baseline so text is visible */
+  color: #213547;
+  background-color: #ffffff;
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  min-width: 320px;
+  min-height: 100vh;
+}
+
+/* Remove the 'place-items: center' from body if it's causing alignment issues, 
+   since your React code already handles centering via Flexbox */
+
+h1 {
+  font-size: 3.2em;
+  line-height: 1.1;
+  margin: 0;
+}
+
+/* Ensure buttons don't have that dark background by default */
+button {
+  font-family: inherit;
+}
