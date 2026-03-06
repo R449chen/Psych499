@@ -6,6 +6,10 @@ function App() {
   const [currentFolderIndex, setCurrentFolderIndex] = useState(0);
   const [currentIndex, setCurrentIndex] = useState(0);
   
+  // Participant ID State
+  const [sonaId, setSonaId] = useState('');
+  const [isIdSubmitted, setIsIdSubmitted] = useState(false);
+  
   const [inputValue, setInputValue] = useState('');
   const [isActive, setIsActive] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
@@ -13,7 +17,6 @@ function App() {
   const [isFinished, setIsFinished] = useState(false);
   
   const [completedChunks, setCompletedChunks] = useState([]);
-  const [attemptId, setAttemptId] = useState('');
   
   // Dev Mode State
   const [isDevMode, setIsDevMode] = useState(false);
@@ -22,10 +25,14 @@ function App() {
   const blockStartTime = useRef(null); 
   const currentChunkStartTime = useRef(null);
 
-  // 1. Setup Session and Load Assets
+  // 1. Initial Setup: Load Manifest & Check URL for SONA ID
   useEffect(() => {
-    const uniqueId = `Attempt-${Date.now()}-${Math.floor(Math.random() * 0xFFFF).toString(16).toUpperCase()}`;
-    setAttemptId(uniqueId);
+    // Check if SONA passed an ID in the URL (e.g., ?id=12345)
+    const params = new URLSearchParams(window.location.search);
+    const idFromUrl = params.get('id') || params.get('participant_id');
+    if (idFromUrl) {
+      setSonaId(idFromUrl);
+    }
 
     fetch('/manifest.json')
       .then(res => res.json())
@@ -108,14 +115,13 @@ function App() {
     setIsPaused(false);
   };
 
-  // 4. Data Saving (Production-Ready)
+  // 4. Data Saving (Using sonaId)
   const saveToDatabase = async (dataList) => {
     try {
-      // Relative path works both on localhost and Render
       await fetch('/api/save-results', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ participantId: attemptId, entries: dataList })
+        body: JSON.stringify({ participantId: sonaId, entries: dataList })
       });
     } catch (error) {
       console.error("Sync Error:", error);
@@ -133,7 +139,7 @@ function App() {
 
     if (e.key === 'Enter') {
       e.preventDefault();
-      if (!inputValue.trim()) return; // Prevent empty entries
+      if (!inputValue.trim()) return;
 
       const startTime = currentChunkStartTime.current || timeInSec;
       const finishTime = timeInSec;
@@ -157,7 +163,7 @@ function App() {
     }
   };
 
-  // 6. Styles
+  // 6. Shared Styles
   const containerStyle = {
     display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
     minHeight: '100vh', width: '100vw', backgroundColor: isPracticeActive ? '#f0f7ff' : '#ffffff', 
@@ -170,9 +176,46 @@ function App() {
     boxShadow: '0 15px 35px rgba(0,0,0,0.1)', textAlign: 'left', lineHeight: '1.6'
   };
 
-  // 7. Render UI
+  // 7. Render UI Logic
+
   if (!manifest) return <div style={containerStyle}>Loading experiment...</div>;
 
+  // STEP A: Login Screen
+  if (!isIdSubmitted) {
+    return (
+      <div style={containerStyle}>
+        <div style={{...cardStyle, textAlign: 'center', width: '450px'}}>
+          <h1 style={{ color: '#2c3e50' }}>Welcome</h1>
+          <p style={{ color: '#666', marginBottom: '30px' }}>Please enter your <strong>SONA ID</strong> to begin the study.</p>
+          <input 
+            type="text" 
+            value={sonaId}
+            onChange={(e) => setSonaId(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && sonaId.trim() && setIsIdSubmitted(true)}
+            placeholder="Enter ID here..."
+            autoFocus
+            style={{
+              width: '100%', padding: '15px', fontSize: '1.2rem', borderRadius: '10px',
+              border: '2px solid #ddd', marginBottom: '25px', textAlign: 'center', outline: 'none'
+            }}
+          />
+          <button 
+            disabled={!sonaId.trim()}
+            onClick={() => setIsIdSubmitted(true)}
+            style={{ 
+              padding: '15px 40px', fontSize: '1.1rem', cursor: sonaId.trim() ? 'pointer' : 'not-allowed', 
+              backgroundColor: sonaId.trim() ? '#007bff' : '#ccc', color: 'white', 
+              border: 'none', borderRadius: '10px', width: '100%', fontWeight: 'bold'
+            }}
+          >
+            CONTINUE
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // STEP B: Finish Screen
   if (isFinished) {
     return (
       <div style={containerStyle}>
@@ -183,7 +226,7 @@ function App() {
             Your participation is greatly appreciated. Your responses have been successfully recorded.
           </p>
           <div style={{ backgroundColor: '#f8f9fa', padding: '20px', borderRadius: '12px', display: 'inline-block', textAlign: 'left', border: '1px solid #eee' }}>
-            <p style={{ margin: '5px 0', fontSize: '0.9rem', color: '#888' }}><strong>Participant ID:</strong> {attemptId}</p>
+            <p style={{ margin: '5px 0', fontSize: '0.9rem', color: '#888' }}><strong>SONA ID:</strong> {sonaId}</p>
             <p style={{ margin: '5px 0', fontSize: '0.9rem', color: '#888' }}><strong>Responses Saved:</strong> {completedChunks.length}</p>
           </div>
         </div>
@@ -191,15 +234,16 @@ function App() {
     );
   }
 
+  // STEP C: Main Task Loop
   return (
     <div style={containerStyle}>
+      {/* HUD elements */}
       <div style={{ position: 'absolute', top: '20px', right: '20px', display: 'flex', gap: '10px' }}>
          <button onClick={toggleDevMode} style={{ padding: '5px 10px', fontSize: '10px', opacity: 0.4, cursor: 'pointer', border: '1px solid #ddd', borderRadius: '4px', background: 'none' }}>
           {isDevMode ? "DISABLE DEV" : "DEV"}
         </button>
       </div>
-
-      <div style={{ position: 'absolute', top: '20px', left: '20px', color: '#bbb', fontSize: '12px' }}>{attemptId}</div>
+      <div style={{ position: 'absolute', top: '20px', left: '20px', color: '#bbb', fontSize: '12px' }}>ID: {sonaId}</div>
 
       {!isActive && (
         <div style={{...cardStyle, textAlign: 'left'}}>
@@ -207,14 +251,22 @@ function App() {
           <p>In this task, you will be shown a series of image sequences. Each sequence consists of a smooth transition where one object gradually morphs into another object.</p>
           <h3 style={{ marginBottom: '10px' }}>Your Task:</h3>
           <ul style={{ marginBottom: '25px' }}>
-            <li style={{ marginBottom: '10px' }}><strong>First Response:</strong> As soon as you clearly recognize the first object, type its name and press the <strong>ENTER</strong> key.</li>
-            <li><strong>Second Response:</strong> As the image continues to change, the moment your perception switches to the new object, type its name and press the <strong>ENTER</strong> key.</li>
-          </ul>
-          <h3 style={{ marginBottom: '10px' }}>Important Notes:</h3>
-          <ul style={{ marginBottom: '30px' }}>
-            <li>You must press <strong>ENTER</strong> after typing to submit your answer.</li>
-            <li>The images will appear one after another automatically.</li>
-            <li>There are no correct or incorrect answers. We are interested in your subjective perception.</li>
+            <li style={{ marginBottom: '10px' }}><strong>Step 1 – First Object:</strong> As soon as you clearly recognize the first object, type its name and press the <strong>ENTER</strong> key.</li>
+            <li><strong>Step 2 – Second Object:</strong> As the image continues to change, your perception may eventually switch to a <strong>different object</strong>. When you clearly recognize the <strong>second object</strong>, type its name and press the <strong>ENTER</strong> key.</li>
+            <li><strong>Important instructions:</strong>
+            <ul>
+              <li>Please provide two different object names for each sequence.</li>
+              <li>The second response should only be entered when your perception changes to a new object.</li>
+              <li>If you type the same object name twice, the response may not be recorded correctly.</li>
+            </ul>
+            </li>
+            
+            <li><strong>Participation note:</strong>
+            <ul>
+              <li>This study should only be completed once per participant.</li>
+              <li>Please do not restart or repeat the experiment after submitting your responses.</li>
+            </ul>
+            </li>
           </ul>
           <div style={{ textAlign: 'center' }}>
             <button onClick={() => setIsActive(true)} style={{ padding: '18px 80px', fontSize: '1.4rem', cursor: 'pointer', backgroundColor: '#007bff', color: 'white', border: 'none', borderRadius: '10px', fontWeight: 'bold' }}>
@@ -251,16 +303,8 @@ function App() {
               placeholder="Type and press Enter..." 
               autoFocus 
               style={{ 
-                width: isDevMode ? '550px' : '780px', 
-                height: '100px', 
-                padding: '20px', 
-                fontSize: '1.4rem', 
-                borderRadius: '12px', 
-                border: '2px solid #ddd', 
-                outline: 'none',
-                color: '#000',
-                backgroundColor: '#fff',
-                resize: 'none'
+                width: isDevMode ? '550px' : '780px', height: '100px', padding: '20px', fontSize: '1.4rem', 
+                borderRadius: '12px', border: '2px solid #ddd', outline: 'none', color: '#000', backgroundColor: '#fff', resize: 'none'
               }} 
             />
             {isDevMode && (
